@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Candy Crush - 500 000+ Niveaux</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&display=swap');
+        
+        * { box-sizing: border-box; }
+        
+        body {
+            font-family: 'Fredoka One', cursive;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .candy {
+            width: 100%;
+            height: 100%;
+            border-radius: 20%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            cursor: pointer;
+            transition: transform 0.15s, box-shadow 0.15s;
+            user-select: none;
+        }
+        
+        .candy:hover {
+            transform: scale(1.1);
+            z-index: 10;
+        }
+        
+        .candy.selected {
+            animation: pulse 0.5s infinite;
+            box-shadow: 0 0 20px white;
+        }
+        
+        .candy.matched {
+            animation: explode 0.3s forwards;
+        }
+        
+        .candy.falling {
+            animation: fall 0.3s ease-in;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.15); }
+        }
+        
+        @keyframes explode {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.5); opacity: 0.5; }
+            100% { transform: scale(0); opacity: 0; }
+        }
+        
+        @keyframes fall {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(0); }
+        }
+        
+        .cell {
+            aspect-ratio: 1;
+            padding: 3px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+        }
+        
+        .game-board {
+            display: grid;
+            gap: 4px;
+            background: rgba(0,0,0,0.3);
+            padding: 10px;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4);
+        }
+        
+        .star { color: #fbbf24; text-shadow: 0 0 10px #fbbf24; }
+        .star-empty { color: #6b7280; }
+        
+        .btn-play {
+            background: linear-gradient(to bottom, #22c55e, #16a34a);
+            box-shadow: 0 4px 0 #15803d, 0 6px 20px rgba(0,0,0,0.3);
+        }
+        
+        .btn-play:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 #15803d, 0 2px 10px rgba(0,0,0,0.3);
+        }
+        
+        .progress-bar {
+            background: linear-gradient(to right, #fbbf24, #f59e0b);
+            transition: width 0.3s;
+        }
+        
+        .obstacle {
+            background: #374151 !important;
+            border: 3px solid #1f2937;
+        }
+        
+        .ice {
+            position: relative;
+        }
+        
+        .ice::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: rgba(147, 197, 253, 0.5);
+            border-radius: 20%;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="p-4">
+    <div id="app" class="max-w-lg mx-auto">
+        <!-- Menu Principal -->
+        <div id="menu" class="text-center py-10">
+            <h1 class="text-5xl text-white mb-2 drop-shadow-lg">🍬 Candy Match</h1>
+            <p class="text-white/80 mb-8">Plus de 500 000 niveaux !</p>
+            
+            <div id="stats" class="bg-white/20 backdrop-blur rounded-2xl p-6 mb-6 text-white">
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <div class="text-3xl font-bold" id="currentLevel">1</div>
+                        <div class="text-sm opacity-80">Niveau</div>
+                    </div>
+                    <div>
+                        <div class="text-3xl font-bold" id="totalStars">0</div>
+                        <div class="text-sm opacity-80">⭐ Total</div>
+                    </div>
+                    <div>
+                        <div class="text-3xl font-bold" id="highestLevel">1</div>
+                        <div class="text-sm opacity-80">Max</div>
+                    </div>
+                </div>
+            </div>
+            
+            <button onclick="startGame()" class="btn-play text-white text-2xl px-12 py-4 rounded-full mb-4 transition-all">
+                ▶ JOUER
+            </button>
+            
+            <div class="mt-4">
+                <button onclick="showLevelSelect()" class="bg-white/20 text-white px-6 py-2 rounded-full hover:bg-white/30 transition">
+                    📋 Niveaux
+                </button>
+                <button onclick="resetProgress()" class="bg-red-500/50 text-white px-6 py-2 rounded-full hover:bg-red-500/70 transition ml-2">
+                    🔄 Reset
+                </button>
+            </div>
+        </div>
+        
+        <!-- Sélection de niveau -->
+        <div id="levelSelect" class="hidden">
+            <div class="flex justify-between items-center mb-4">
+                <button onclick="showMenu()" class="bg-white/20 text-white px-4 py-2 rounded-full">← Retour</button>
+                <h2 class="text-2xl text-white">Sélection Niveau</h2>
+                <div></div>
+            </div>
+            
+            <div class="bg-white/20 backdrop-blur rounded-xl p-4 mb-4">
+                <label class="text-white block mb-2">Aller au niveau:</label>
+                <div class="flex gap-2">
+                    <input type="number" id="levelInput" min="1" max="500000" value="1" 
+                           class="flex-1 px-4 py-2 rounded-lg text-center text-xl">
+                    <button onclick="goToLevel()" class="bg-green-500 text-white px-6 py-2 rounded-lg">GO</button>
+                </div>
+            </div>
+            
+            <div id="levelGrid" class="grid grid-cols-5 gap-2 max-h-96 overflow-y-auto p-2">
+            </div>
+            
+            <div class="flex justify-center gap-2 mt-4">
+                <button onclick="prevPage()" class="bg-white/20 text-white px-4 py-2 rounded-lg">◀ Préc</button>
+                <span id="pageInfo" class="text-white py-2 px-4"></span>
+                <button onclick="nextPage()" class="bg-white/20 text-white px-4 py-2 rounded-lg">Suiv ▶</button>
+            </div>
+        </div>
+        
+        <!-- Jeu -->
+        <div id="game" class="hidden">
+            <div class="flex justify-between items-center mb-4 text-white">
+                <button onclick="showMenu()" class="bg-white/20 px-4 py-2 rounded-full text-sm">← Menu</button>
+                <div class="text-center">
+                    <div class="text-sm opacity-80">Niveau</div>
+                    <div class="text-2xl" id="gameLevelNum">1</div>
+                </div>
+                <div class="text-right">
+                    <div class="text-sm opacity-80">Coups</div>
+                    <div class="text-2xl" id="movesLeft">20</div>
+                </div>
+            </div>
+            
+            <div class="bg-white/20 backdrop-blur rounded-xl p-3 mb-4">
+                <div class="flex justify-between text-white text-sm mb-1">
+                    <span>Score: <span id="score">0</span></span>
+                    <span>Objectif: <span id="targetScore">1000</span></span>
+                </div>
+                <div class="bg-white/30 rounded-full h-4 overflow-hidden">
+                    <div id="progressBar" class="progress-bar h-full" style="width: 0%"></div>
+                </div>
+                <div class="flex justify-center gap-1 mt-2">
+                    <span id="star1" class="text-2xl star-empty">★</span>
+                    <span id="star2" class="text-2xl star-empty">★</span>
+                    <span id="star3" class="text-2xl star-empty">★</span>
+                </div>
+            </div>
+            
+            <div id="board" class="game-board mx-auto"></div>
+            
+            <div id="levelInfo" class="text-center text-white/70 text-sm mt-4"></div>
+        </div>
+        
+        <!-- Popup Victoire/Défaite -->
+        <div id="popup" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+            <div class="bg-white rounded-3xl p-8 text-center max-w-sm mx-4 transform scale-100">
+                <div id="popupIcon" class="text-6xl mb-4">🎉</div>
+                <h2 id="popupTitle" class="text-3xl font-bold mb-2">Victoire!</h2>
+                <div id="popupStars" class="text-4xl mb-4">⭐⭐⭐</div>
+                <p id="popupMessage" class="text-gray-600 mb-6">Score: 1500</p>
+                <div class="flex gap-3 justify-center">
+                    <button onclick="showMenu()" class="bg-gray-200 px-6 py-3 rounded-full">Menu</button>
+                    <button onclick="restartLevel()" class="bg-blue-500 text-white px-6 py-3 rounded-full">Rejouer</button>
+                    <button id="nextLevelBtn" onclick="nextLevel()" class="btn-play text-white px-6 py-3 rounded-full">Suivant</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration du jeu
+        const CANDIES = ['🍬', '🍭', '🍫', '🍩', '🍪', '🧁', '🍰', '🎂', '🍡', '🍮'];
+        const CANDY_COLORS = [
+            'linear-gradient(135deg, #ff6b6b, #ee5a5a)',
+            'linear-gradient(135deg, #4ecdc4, #44a08d)',
+            'linear-gradient(135deg, #a855f7, #7c3aed)',
+            'linear-gradient(135deg, #fbbf24, #f59e0b)',
+            'linear-gradient(135deg, #3b82f6, #2563eb)',
+            'linear-gradient(135deg, #ec4899, #db2777)',
+            'linear-gradient(135deg, #10b981, #059669)',
+            'linear-gradient(135deg, #f97316, #ea580c)',
+            'linear-gradient(135deg, #8b5cf6, #6d28d9)',
+            'linear-gradient(135deg, #06b6d4, #0891b2)'
+        ];
+        
+        let gameState = {
+            level: 1,
+            highestLevel: 1,
+            totalStars: 0,
+            levelStars: {}
+        };
+        
+        let board = [];
+        let boardSize = 8;
+        let numCandyTypes = 4;
+        let selectedCell = null;
+        let score = 0;
+        let moves = 0;
+        let targetScore = 1000;
+        let isProcessing = false;
+        let currentPage = 0;
+        const LEVELS_PER_PAGE = 25;
+        
+        // Charger la sauvegarde
+        function loadGame() {
+            const saved = localStorage.getItem('candyCrushSave');
+            if (saved) {
+                gameState = JSON.parse(saved);
+            }
+            updateMenuStats();
+        }
+        
+        // Sauvegarder
+        function saveGame() {
+            localStorage.setItem('candyCrushSave', JSON.stringify(gameState));
+        }
+        
+        // Générateur de niveau procédural basé sur le numéro
+        function generateLevelConfig(levelNum) {
+            // Seed basé sur le niveau pour reproductibilité
+            const seed = levelNum * 12345;
+            const rand = (n) => ((seed * n) % 997) / 997;
+            
+            // Taille du plateau (7-10)
+            let size = 7 + Math.floor(Math.min(levelNum / 50000, 3));
+            
+            // Nombre de types de bonbons (4-10)
+            let types = Math.min(4 + Math.floor(levelNum / 20000), 10);
+            
+            // Nombre de coups (diminue avec le niveau)
+            let baseMoves = 30;
+            let movesReduction = Math.floor(levelNum / 5000);
+            let levelMoves = Math.max(10, baseMoves - movesReduction + Math.floor(rand(1) * 5));
+            
+            // Score cible (augmente exponentiellement)
+            let baseTarget = 500 + levelNum * 2;
+            let multiplier = 1 + (levelNum / 10000);
+            let target = Math.floor(baseTarget * multiplier);
+            
+            // Objectifs étoiles
+            let star1 = target;
+            let star2 = Math.floor(target * 1.5);
+            let star3 = Math.floor(target * 2.2);
+            
+            // Obstacles (apparaissent après niveau 100)
+            let obstacles = [];
+            if (levelNum > 100) {
+                let numObstacles = Math.min(Math.floor((levelNum - 100) / 500), Math.floor(size * size * 0.15));
+                for (let i = 0; i < numObstacles; i++) {
+                    let x = Math.floor(rand(i * 2) * size);
+                    let y = Math.floor(rand(i * 2 + 1) * size);
+                    obstacles.push({x, y});
+                }
+            }
+            
+            // Glace (apparaît après niveau 500)
+            let ice = [];
+            if (levelNum > 500) {
+                let numIce = Math.min(Math.floor((levelNum - 500) / 1000), Math.floor(size * size * 0.2));
+                for (let i = 0; i < numIce; i++) {
+                    let x = Math.floor(rand(i * 3 + 100) * size);
+                    let y = Math.floor(rand(i * 3 + 101) * size);
+                    if (!obstacles.find(o => o.x === x && o.y === y)) {
+                        ice.push({x, y});
+                    }
+                }
+            }
+            
+            return { size, types, moves: levelMoves, target, star1, star2, star3, obstacles, ice };
+        }
+        
+        // Initialiser le plateau
+        function initBoard(config) {
+            boardSize = config.size;
+            numCandyTypes = config.types;
+            board = [];
+            
+            const boardEl = document.getElementById('board');
+            boardEl.innerHTML = '';
+            boardEl.style.gridTemplateColumns = `repeat(${boardSize}, 1fr)`;
+            boardEl.style.width = `${Math.min(400, boardSize * 50)}px`;
+            
+            for (let y = 0; y < boardSize; y++) {
+                board[y] = [];
+                for (let x = 0; x < boardSize; x++) {
+                    const isObstacle = config.obstacles.find(o => o.x === x && o.y === y);
+                    const isIce = config.ice.find(i => i.x === x && i.y === y);
+                    
+                    if (isObstacle) {
+                        board[y][x] = { type: -1, obstacle: true };
+                    } else {
+                        let type;
+                        do {
+                            type = Math.floor(Math.random() * numCandyTypes);
+                        } while (wouldMatch(x, y, type));
+                        
+                        board[y][x] = { type, ice: isIce ? 1 : 0 };
+                    }
+                    
+                    const cell = document.createElement('div');
+                    cell.className = 'cell';
+                    cell.dataset.x = x;
+                    cell.dataset.y = y;
+                    cell.onclick = () => cellClick(x, y);
+                    boardEl.appendChild(cell);
+                }
+            }
+            
+            renderBoard();
+        }
+        
+        // Vérifier si placement créerait un match
+        function wouldMatch(x, y, type) {
+            // Horizontal
+            if (x >= 2 && board[y][x-1]?.type === type && board[y][x-2]?.type === type) return true;
+            // Vertical
+            if (y >= 2 && board[y-1]?.[x]?.type === type && board[y-2]?.[x]?.type === type) return true;
+            return false;
+        }
+        
+        // Rendre le plateau
+        function renderBoard() {
+            for (let y = 0; y < boardSize; y++) {
+                for (let x = 0; x < boardSize; x++) {
+                    const cell = document.querySelector(`[data-x="${x}"][data-y="${y}"]`);
+                    const candy = board[y][x];
+                    
+                    if (candy.obstacle) {
+                        cell.innerHTML = '<div class="candy obstacle">🪨</div>';
+                    } else if (candy.type >= 0) {
+                        const div = document.createElement('div');
+                        div.className = 'candy' + (candy.ice ? ' ice' : '');
+                        div.style.background = CANDY_COLORS[candy.type];
+                        div.textContent = CANDIES[candy.type];
+                        cell.innerHTML = '';
+                        cell.appendChild(div);
+                    } else {
+                        cell.innerHTML = '';
+                    }
+                }
+            }
+        }
+        
+        // Clic sur une cellule
+        function cellClick(x, y) {
+            if (isProcessing) return;
+            if (board[y][x].obstacle) return;
+            
+            if (selectedCell === null) {
+                selectedCell = {x, y};
+                const cell = document.querySelector(`[data-x="${x}"][data-y="${y}"] .candy`);
+                if (cell) cell.classList.add('selected');
+            } else {
+                const dx = Math.abs(selectedCell.x - x);
+                const dy = Math.abs(selectedCell.y - y);
+                
+                // Adjacent?
+                if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
+                    swapCandies(selectedCell.x, selectedCell.y, x, y);
+                }
+                
+                document.querySelectorAll('.candy.selected').forEach(c => c.classList.remove('selected'));
+                selectedCell = null;
+            }
+        }
+        
+        // Échanger deux bonbons
+        async function swapCandies(x1, y1, x2, y2) {
+            isProcessing = true;
+            
+            // Swap
+            const temp = board[y1][x1];
+            board[y1][x1] = board[y2][x2];
+            board[y2][x2] = temp;
+            
+            renderBoard();
+            await sleep(150);
+            
+            // Vérifier matches
+            const matches = findMatches();
+            
+            if (matches.length === 0) {
+                // Pas de match, annuler
+                const temp = board[y1][x1];
+                board[y1][x1] = board[y2][x2];
+                board[y2][x2] = temp;
+                renderBoard();
+            } else {
+                moves--;
+                document.getElementById('movesLeft').textContent = moves;
+                await processMatches();
+            }
+            
+            isProcessing = false;
+            checkGameEnd();
+        }
+        
+        // Trouver tous les matches
+        function findMatches() {
+            const matches = new Set();
+            
+            // Horizontal
+            for (let y = 0; y < boardSize; y++) {
+                for (let x = 0; x < boardSize - 2; x++) {
+                    if (board[y][x].type >= 0) {
+                        const type = board[y][x].type;
+                        if (board[y][x+1]?.type === type && board[y][x+2]?.type === type) {
+                            let len = 3;
+                            while (x + len < boardSize && board[y][x+len]?.type === type) len++;
+                            for (let i = 0; i < len; i++) {
+                                matches.add(`${x+i},${y}`);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Vertical
+            for (let x = 0; x < boardSize; x++) {
+                for (let y = 0; y < boardSize - 2; y++) {
+                    if (board[y][x].type >= 0) {
+                        const type = board[y][x].type;
+                        if (board[y+1]?.[x]?.type === type && board[y+2]?.[x]?.type === type) {
+                            let len = 3;
+                            while (y + len < boardSize && board[y+len]?.[x]?.type === type) len++;
+                            for (let i = 0; i < len; i++) {
+                                matches.add(`${x},${y+i}`);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return Array.from(matches).map(s => {
+                const [x, y] = s.split(',').map(Number);
+                return {x, y};
+            });
+        }
+        
+        // Traiter les matches
+        async function processMatches() {
+            let matches = findMatches();
+            
+            while (matches.length > 0) {
+                // Animation d'explosion
+                matches.forEach(({x, y}) => {
+                    const candy = document.querySelector(`[data-x="${x}"][data-y="${y}"] .candy`);
+                    if (candy) candy.classList.add('matched');
+                });
+                
+                await sleep(300);
+                
+                // Calculer score
+                const basePoints = matches.length * 10;
+                const bonus = Math.max(0, matches.length - 3) * 20;
+                score += basePoints + bonus;
+                
+                // Supprimer glace et bonbons
+                matches.forEach(({x, y}) => {
+                    if (board[y][x].ice > 0) {
+                        board[y][x].ice--;
+                    }
+                    board[y][x].type = -1;
+                });
+                
+                updateScore();
+                
+                // Faire tomber les bonbons
+                await dropCandies();
+                
+                // Remplir les espaces vides
+                fillBoard();
+                renderBoard();
+                
+                await sleep(200);
+                
+                matches = findMatches();
+            }
+        }
+        
+        // Faire tomber les bonbons
+        async function dropCandies() {
+            let dropped = false;
+            
+            for (let x = 0; x < boardSize; x++) {
+                for (let y = boardSize - 1; y >= 0; y--) {
+                    if (board[y][x].type === -1 && !board[y][x].obstacle) {
+                        // Trouver le bonbon au-dessus
+                        for (let y2 = y - 1; y2 >= 0; y2--) {
+                            if (board[y2][x].type >= 0) {
+                                board[y][x] = {...board[y2][x]};
+                                board[y2][x] = { type: -1, ice: 0 };
+                                dropped = true;
+                                break;
+                            } else if (board[y2][x].obstacle) {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (dropped) {
+                renderBoard();
+                await sleep(150);
+            }
+        }
+        
+        // Remplir le plateau
+        function fillBoard() {
+            for (let y = 0; y < boardSize; y++) {
+                for (let x = 0; x < boardSize; x++) {
+                    if (board[y][x].type === -1 && !board[y][x].obstacle) {
+                        board[y][x] = {
+                            type: Math.floor(Math.random() * numCandyTypes),
+                            ice: 0
+                        };
+                    }
+                }
+            }
+        }
+        
+        // Mettre à jour le score
+        function updateScore() {
+            document.getElementById('score').textContent = score;
+            
+            const config = generateLevelConfig(gameState.level);
+            const progress = Math.min(100, (score / config.star1) * 100);
+            document.getElementById('progressBar').style.width = `${progress}%`;
+            
+            // Étoiles
+            document.getElementById('star1').className = score >= config.star1 ? 'text-2xl star' : 'text-2xl star-empty';
+            document.getElementById('star2').className = score >= config.star2 ? 'text-2xl star' : 'text-2xl star-empty';
+            document.getElementById('star3').className = score >= config.star3 ? 'text-2xl star' : 'text-2xl star-empty';
+        }
+        
+        // Vérifier fin de partie
+        function checkGameEnd() {
+            const config = generateLevelConfig(gameState.level);
+            
+            if (score >= config.star1) {
+                // Victoire!
+                let stars = 1;
+                if (score >= config.star2) stars = 2;
+                if (score >= config.star3) stars = 3;
+                
+                const prevStars = gameState.levelStars[gameState.level] || 0;
+                if (stars > prevStars) {
+                    gameState.totalStars += (stars - prevStars);
+                    gameState.levelStars[gameState.level] = stars;
+                }
+                
+                if (gameState.level >= gameState.highestLevel) {
+                    gameState.highestLevel = gameState.level + 1;
+                }
+                
+                saveGame();
+                showPopup(true, stars);
+            } else if (moves <= 0) {
+                // Défaite
+                showPopup(false, 0);
+            }
+        }
+        
+        // Afficher popup
+        function showPopup(win, stars) {
+            document.getElementById('popup').classList.remove('hidden');
+            document.getElementById('popupIcon').textContent = win ? '🎉' : '😢';
+            document.getElementById('popupTitle').textContent = win ? 'Victoire!' : 'Perdu...';
+            document.getElementById('popupStars').textContent = win ? '⭐'.repeat(stars) + '☆'.repeat(3-stars) : '';
+            document.getElementById('popupMessage').textContent = `Score: ${score}`;
+            document.getElementById('nextLevelBtn').style.display = win ? 'block' : 'none';
+        }
+        
+        // Démarrer le jeu
+        function startGame() {
+            document.getElementById('menu').classList.add('hidden');
+            document.getElementById('levelSelect').classList.add('hidden');
+            document.getElementById('game').classList.remove('hidden');
+            document.getElementById('popup').classList.add('hidden');
+            
+            const config = generateLevelConfig(gameState.level);
+            
+            score = 0;
+            moves = config.moves;
+            targetScore = config.star1;
+            
+            document.getElementById('gameLevelNum').textContent = gameState.level.toLocaleString();
+            document.getElementById('movesLeft').textContent = moves;
+            document.getElementById('targetScore').textContent = targetScore.toLocaleString();
+            document.getElementById('score').textContent = '0';
+            document.getElementById('progressBar').style.width = '0%';
+            document.getElementById('star1').className = 'text-2xl star-empty';
+            document.getElementById('star2').className = 'text-2xl star-empty';
+            document.getElementById('star3').className = 'text-2xl star-empty';
+            
+            // Info niveau
+            let info = `Taille: ${config.size}x${config.size} | Types: ${config.types}`;
+            if (config.obstacles.length > 0) info += ` | Obstacles: ${config.obstacles.length}`;
+            if (config.ice.length > 0) info += ` | Glace: ${config.ice.length}`;
+            document.getElementById('levelInfo').textContent = info;
+            
+            initBoard(config);
+            
+            // Vérifier s'il y a des mouvements possibles
+            setTimeout(() => {
+                if (!hasPossibleMoves()) {
+                    shuffleBoard();
+                }
+            }, 500);
+        }
+        
+        // Vérifier mouvements possibles
+        function hasPossibleMoves() {
+            for (let y = 0; y < boardSize; y++) {
+                for (let x = 0; x < boardSize; x++) {
+                    if (board[y][x].type < 0) continue;
+                    
+                    // Essayer swap droite
+                    if (x < boardSize - 1 && board[y][x+1].type >= 0) {
+                        swap(x, y, x+1, y);
+                        if (findMatches().length > 0) {
+                            swap(x, y, x+1, y);
+                            return true;
+                        }
+                        swap(x, y, x+1, y);
+                    }
+                    
+                    // Essayer swap bas
+                    if (y < boardSize - 1 && board[y+1][x].type >= 0) {
+                        swap(x, y, x, y+1);
+                        if (findMatches().length > 0) {
+                            swap(x, y, x, y+1);
+                            return true;
+                        }
+                        swap(x, y, x, y+1);
+                    }
+                }
+            }
+            return false;
+        }
+        
+        function swap(x1, y1, x2, y2) {
+            const temp = board[y1][x1];
+            board[y1][x1] = board[y2][x2];
+            board[y2][x2] = temp;
+        }
+        
+        // Mélanger le plateau
+        function shuffleBoard() {
+            const candies = [];
+            for (let y = 0; y < boardSize; y++) {
+                for (let x = 0; x < boardSize; x++) {
+                    if (board[y][x].type >= 0) {
+                        candies.push(board[y][x]);
+                    }
+                }
+            }
+            
+            // Fisher-Yates shuffle
+            for (let i = candies.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [candies[i], candies[j]] = [candies[j], candies[i]];
+            }
+            
+            let idx = 0;
+            for (let y = 0; y < boardSize; y++) {
+                for (let x = 0; x < boardSize; x++) {
+                    if (board[y][x].type >= 0) {
+                        board[y][x] = candies[idx++];
+                    }
+                }
+            }
+            
+            renderBoard();
+            
+            // Vérifier encore
+            setTimeout(async () => {
+                const matches = findMatches();
+                if (matches.length > 0) {
+                    await processMatches();
+                }
+                if (!hasPossibleMoves()) {
+                    shuffleBoard();
+                }
+            }, 300);
+        }
+        
+        // Navigation
+        function showMenu() {
+            document.getElementById('menu').classList.remove('hidden');
+            document.getElementById('game').classList.add('hidden');
+            document.getElementById('levelSelect').classList.add('hidden');
+            document.getElementById('popup').classList.add('hidden');
+            updateMenuStats();
+        }
+        
+        function showLevelSelect() {
+            document.getElementById('menu').classList.add('hidden');
+            document.getElementById('levelSelect').classList.remove('hidden');
+            currentPage = Math.floor((gameState.level - 1) / LEVELS_PER_PAGE);
+            renderLevelGrid();
+        }
+        
+        function renderLevelGrid() {
+            const grid = document.getElementById('levelGrid');
+            grid.innerHTML = '';
+            
+            const start = currentPage * LEVELS_PER_PAGE + 1;
+            const end = start + LEVELS_PER_PAGE;
+            
+            for (let i = start; i < end; i++) {
+                const btn = document.createElement('button');
+                const stars = gameState.levelStars[i] || 0;
+                const unlocked = i <= gameState.highestLevel;
+                
+                btn.className = `p-2 rounded-lg text-center transition ${
+                    unlocked 
+                        ? (i === gameState.level ? 'bg-green-500 text-white' : 'bg-white/80 hover:bg-white')
+                        : 'bg-gray-500/50 text-gray-400 cursor-not-allowed'
+                }`;
+                
+                btn.innerHTML = `
+                    <div class="font-bold">${i}</div>
+                    <div class="text-xs">${unlocked ? '⭐'.repeat(stars) + '☆'.repeat(3-stars) : '🔒'}</div>
+                `;
+                
+                if (unlocked) {
+                    btn.onclick = () => {
+                        gameState.level = i;
+                        saveGame();
+                        startGame();
+                    };
+                }
+                
+                grid.appendChild(btn);
+            }
+            
+            document.getElementById('pageInfo').textContent = `${start}-${end-1}`;
+        }
+        
+        function prevPage() {
+            if (currentPage > 0) {
+                currentPage--;
+                renderLevelGrid();
+            }
+        }
+        
+        function nextPage() {
+            if ((currentPage + 1) * LEVELS_PER_PAGE < 500000) {
+                currentPage++;
+                renderLevelGrid();
+            }
+        }
+        
+        function goToLevel() {
+            const level = parseInt(document.getElementById('levelInput').value);
+            if (level >= 1 && level <= 500000 && level <= gameState.highestLevel) {
+                gameState.level = level;
+                saveGame();
+                startGame();
+            } else if (level > gameState.highestLevel) {
+                alert(`Niveau ${level} verrouillé! Niveau max débloqué: ${gameState.highestLevel}`);
+            }
+        }
+        
+        function restartLevel() {
+            document.getElementById('popup').classList.add('hidden');
+            startGame();
+        }
+        
+        function nextLevel() {
+            gameState.level++;
+            saveGame();
+            startGame();
+        }
+        
+        function resetProgress() {
+            if (confirm('Effacer toute la progression?')) {
+                localStorage.removeItem('candyCrushSave');
+                gameState = { level: 1, highestLevel: 1, totalStars: 0, levelStars: {} };
+                updateMenuStats();
+            }
+        }
+        
+        function updateMenuStats() {
+            document.getElementById('currentLevel').textContent = gameState.level.toLocaleString();
+            document.getElementById('totalStars').textContent = gameState.totalStars.toLocaleString();
+            document.getElementById('highestLevel').textContent = gameState.highestLevel.toLocaleString();
+        }
+        
+        function sleep(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+        
+        // Démarrage
+        loadGame();
+    </script>
+</body>
+</html>
